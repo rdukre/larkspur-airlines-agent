@@ -8,8 +8,7 @@ AI-powered Larkspur Airlines disruption support agent connected to booking, flig
 Does:
 Helps disrupted passengers understand options, find travel alternatives, check policies, and determine the earliest available travel date through natural language conversations.
 
-Number:
-Passed all Build 1 and Build 2 verification gates, including successful routing and execution of next_available_day through MCP.
+Number: 5 of 6 eval cases passed (83%), n=6 evaluation cases, rubric v2, 1 run each.
 
 Guardrail:
 Requires customer confirmation before irreversible booking actions and escalates out-of-scope requests to a human agent.
@@ -17,8 +16,7 @@ Requires customer confirmation before irreversible booking actions and escalates
 Next:
 Expand evaluation coverage, add more operational scenarios, and improve production-readiness through broader testing.
 
-Still broken:
-Limited scenario coverage, no advanced inventory optimization, no refund automation, and additional real-world testing is still required.
+Still broken: The agent does not reliably escalate abusive or legal-threat conversations and can continue with entitlement guidance instead of escalating to a human.
 
 Lever: intelligence
 
