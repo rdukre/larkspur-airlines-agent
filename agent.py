@@ -19,6 +19,8 @@ MAX_TOOL_CALLS = 8  # Larkspur's own build capped the loop here; then a human ta
 TONE_ADDENDUM = ""                       # ✏️ Build 4, step 4.1, intelligence lane
 EXTRA_TOOLS: List[Dict[str, Any]] = []   # ✏️ Build 2, step 2.1: schemas for the tools you add
 LOCAL_TOOLS: Dict[str, Any] = {}         # ✏️ Build 2, step 2.1: the functions behind them
+# 2.2: next_available_day is served by support/mcp_server.py now. Its schema and
+# description live there, and tool_list() discovers it. One name, one owner.
 
 
 def text_of(response) -> str:
@@ -68,22 +70,22 @@ def run_agent(pnr: str, last_name: str, message: str) -> str:            # ✏�
     answer = ""
     turns = 1
     while response.stop_reason == "tool_use" and turns < MAX_TOOL_CALLS:
-        messages.append({"role": "assistant", "content": text_of(response)})
+        messages.append({"role": "assistant", "content": response.content})
         messages.append({"role": "user", "content": tool_results(response)})
-        answer = text_of(response)
+        answer = text_of(response) or answer
         response = client.messages.create(
             model=MODEL, max_tokens=4096, system=runtime_preamble() + SYSTEM_PROMPT + TONE_ADDENDUM,
             thinking={"type": "adaptive"}, tools=tools, messages=messages,
         )
         turns += 1
 
-    return answer
+    return text_of(response) or answer
 
 
 def tool_list() -> List[Dict[str, Any]]:                   # ✏️ Build 2, step 2.2
     """Given. Exactly what Claude is offered on every turn; run.py --show-tools
     prints this list."""
-    return build_tools() + EXTRA_TOOLS
+    return build_tools() + EXTRA_TOOLS + mcp_client.tools()
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -119,17 +121,35 @@ def build_tools() -> List[Dict[str, Any]]:                 # ✏️ Build 1, ste
                 "type": "object",
                 "properties": {
                     "flight_no": {"type": "string"},
-                    "date": {"type": "string", "description": "MM/DD/YYYY"},
+                    "date": {"type": "string", "description": (
+                        "The flight's local departure date in ISO format, YYYY-MM-DD, "
+                        "for example 2025-05-08. Pass the segment date exactly as "
+                        "lookup_booking returned it; do not reformat it."
+                    )},
                 },
                 "required": ["flight_no", "date"],
             },
         },
         {
             "name": "search_alternatives",
-            "description": "search",
+            "description": (
+                "Find the re-accommodation options Larkspur can actually offer this "
+                "booking after a delay or cancellation. Call it once you know from "
+                "get_flight_status that the original flight will not carry the customer, "
+                "and before you offer any specific flight, hold a seat, or quote a new "
+                "departure time; never invent an alternative from memory. Origin, "
+                "destination, date, cabin and party size are read from the booking "
+                "itself, so the PNR is all it needs. Returns candidate options, each "
+                "with an option_id, date, departure and arrival times, stops, cabin, "
+                "seats available and operating carrier, plus the options it ruled out "
+                "and why. hold_seat takes the option_id from here."
+            ),
             "input_schema": {
                 "type": "object",
-                "properties": {"pnr": {"type": "string"}},
+                "properties": {"pnr": {"type": "string", "description": (
+                    "The confirmation code of the disrupted booking, as returned by "
+                    "lookup_booking."
+                )}},
                 "required": ["pnr"],
             },
         },
